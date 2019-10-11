@@ -5,34 +5,128 @@ output: html_notebook
 
 
 For the regular expression exercises, try writing first using regular expressions directly, then try using rverbalexpressions. Provide the code for both. 
-
+Import the libraries
+```{r}
+library(lubridate)
+library(tidyverse)
+library(RVerbalExpressions)
+library(stringr)
+```
 # Part 1
 
 ## R4DS 16.4.5
 
 Create a vector of dates giving the first day of every month in the current year. 
+```{r}
+first_day <- ymd("2019-01-01")+months(0:11)
+first_day
+```
 
 Write a function that given your birthday (as a date), returns how old you are in years.
+```{r}
+get_age <- function(birthdate){
+  year(today())-year(birthdate)
+}
+```
+
+```{r}
+birth = '1995-10-31'
+get_age(birth)
+```
 
 Write a function that given your birthday, returns the day of the week you were born on. 
+```{r}
+get_weekday <- function(birthday){
+ wday(birthday, label = TRUE, abbr = TRUE)
+}
+get_weekday('1995-10-31')
+```
 
 ## R4DS 14.3.2.1
 
 Given the corpus of common words in stringr::words, create regular expressions that find all words that have seven letters or more. (Since this list is long, you might want to use the match argument to str_view() to show only the matching or non-matching words.)
+```{r}
+# Regex Version
+str_view(stringr::words, "[a-zA-Z]{7,}")
+```
+```{r}
+# RVerbalexpressions
+morethan_seven <- rx() %>% 
+  rx_start_of_line() %>% 
+  rx_any_of("a-zA-Z") %>% 
+  rx_multiple(min = 7) %>% 
+  rx_end_of_line()
+
+str_view(stringr::words, morethan_seven)
+```
 
 ## R4DS 14.3.3.1
 
 Use str_detect to find all words that:
 
 That only contain consonants. (Hint: thinking about matching “not”-vowels.)
+```{r}
+# Regex
+words[str_detect(stringr::words, "^[^aeiou]+$")]
+```
+```{r}
+# RVerbalexpressions
+only_consonants <- rx() %>% 
+  rx_start_of_line() %>% 
+  rx_anything_but('aeiou') %>% 
+  rx_end_of_line()
+words[str_detect(stringr::words, only_consonants)]
+```
 
 Empirically verify the rule “i before e except after c”.
+```{r}
+# Regex
+words[str_detect(stringr::words, "[^c]ie|cei")]
+# There are 14 words which don't follow the rule
+words[str_detect(stringr::words, "[^c]ei|cie")]
+# There are 3 words which follow the rule
+```
+```{r}
+# RVerbalexpressions
+ie_rule <- rx() %>% 
+  rx_either_of("cei", 
+               rx() %>% 
+                 rx_something_but("c") %>% 
+                 rx_find("ie")
+               )
+words[str_detect(stringr::words, ie_rule)]
+# There are 14 words which don't follow the rule
+ie_rule <- rx() %>% 
+  rx_either_of("cie", 
+               rx() %>% 
+                 rx_something_but("c") %>% 
+                 rx_find("ei")
+               )
+words[str_detect(stringr::words, ie_rule)]
+# There are 3 words which follow the rule
+```
 
 Create a regular expression that will match telephone numbers as commonly written in the US. Split this up into multiple expressions as needed.
+```{r}
+# Regex Version
+grepl("^\\d{3}[-\\.]\\d{3}[-\\.]\\d{4}$", c("201-713-7914", "201.713.7914"))
+```
+```{r}
+# RVerbalexpressions
+telrx <- rx_start_of_line() %>% 
+  rx_digit() %>% 
+  rx_repeat_previous(3) %>% 
+  rx_any_of("-.") %>% 
+  rx_digit() %>% 
+  rx_repeat_previous(3) %>%
+  rx_any_of("-.") %>% 
+  rx_digit() %>% 
+  rx_repeat_previous(4) %>% 
+  grepl(c("201-713-7914", "201.713-7914")) %>% 
+  print()
+```
 
 # Part 2
-
-
 Choose a dataset (this can be the same dataset as the last assignment, or a new one). Define a predictive modeling problem. Create the appropriate files and notebooks to do the following:
 
 1. Describe the data and the problem

@@ -1,0 +1,138 @@
+---
+title: "Data Cleaning"
+output:
+  html_document:
+    df_print: paged
+---
+# About the servo dataset
+
+This data set is from a simulation of a servo system involving a servo amplifier, a motor, a lead screw/nut, and a sliding carriage of some sort. It may have been on of the translational axes of a robot on the 9th floor of the AI lab. In any case, the output value is almost certainly a rise time, or the time required for the system to respond to a step change in a position set point. The variables that describe the data set and their values are the following:
+
+Motor:	A,B,C,D,E
+Screw:	A,B,C,D,E
+Pgain:	3,4,5,6
+Vgain:	1,2,3,4,5
+Class:	0.13 to 7.10
+# The predictive modeling problem
+
+I would like to investigate if we can use the variables Motor, Screw, Pgain and Vgain to predict the Class of servo by using regression.
+
+# Import the dataset servo
+
+```{r library_import}
+library(readr)
+library(tidyverse)
+library(assertr)
+Servo <- read_csv("Servo.csv")
+```
+# Test each variable
+
+```{r str_check}
+Servo %>% 
+  str()
+```
+```{r summary_check}
+Servo %>% 
+  summary()
+```
+```{r Motor_test}
+Servo %>% 
+  assert(in_set("A","B","C","D","E"), Motor)
+```
+Looks great!
+
+```{r Screw_test}
+Servo %>% 
+  assert(in_set("A","B","C","D","E"), Screw)
+```
+Looks great!
+
+```{r Pgain_test}
+Servo %>% 
+  assert(in_set(3,4,5,6), Pgain)
+```
+Looks great!
+
+```{r Vgain_test}
+Servo %>% 
+  assert(in_set(1,2,3,4,5), Vgain)
+```
+Looks great!
+
+```{r Class_test, error=TRUE}
+Servo %>% 
+  assert(within_bounds(0.13, 7.10), Class)
+```
+Whoops!  It seems like most of the observations have the Class value in the invalid range!  
+
+# Data Cleaning
+
+We assume that this column has been timed 10, so we just divide the values by 10 and we'll select the records with valid Class value.
+```{r data_clean}
+Servo <- Servo %>% 
+  mutate(Class = Class/10) %>% 
+  filter(Class > 0.13, Class < 7.1)
+```
+
+Then we group the dataset and make it odered
+```{r data_order}
+Servo %>% 
+  arrange(Motor, Screw, Pgain, Vgain)
+```
+# Feature engineering
+```{r functions_define}
+scales2 <- function(x){
+  (x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE)
+}
+class_mean <- function(df, vars){
+  df %>% 
+    group_by(Motor, Screw) %>% 
+    mutate(mean_class = mean({{vars}}, na.rm = TRUE)) %>% 
+    ungroup() 
+}
+class_max <- function(df, vars){
+  df %>% 
+    group_by(Motor, Screw) %>% 
+    mutate(max_class = max({{vars}})) %>% 
+    ungroup() 
+}
+class_min<- function(df, vars){
+  df %>% 
+    group_by(Motor, Screw) %>% 
+    mutate(min_class = min({{vars}})) %>% 
+    ungroup() 
+}
+class_std <- function(df, vars){
+  df %>% 
+    group_by(Motor, Screw) %>% 
+    mutate_at(vars, list(std_class = scales2)) %>% 
+    ungroup() 
+}
+```
+
+```{r features_create}
+featured_Servo <- Servo %>% 
+  class_mean(Class) %>% 
+  class_max(Class) %>% 
+  class_min(Class) %>% 
+  class_std(c('Class'))
+```
+
+```{r features_test}
+# Test the features
+featured_Servo %>% 
+  assert(within_bounds(0.13, 7.10), max_class)
+
+featured_Servo %>% 
+  assert(within_bounds(0.13, 7.10), min_class)
+
+featured_Servo %>% 
+  assert(within_bounds(0.13, 7.10), mean_class)
+```
+
+# Prepare the data for modeling
+```{r data_prepare}
+# The dataset has been cleaned and it's ready for applying the model.
+modeling_data <- Servo
+```
+
