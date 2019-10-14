@@ -1,21 +1,27 @@
 ---
-title: "Data Cleaning"
+title: "Data Preprocess"
 output:
   html_document:
     df_print: paged
 ---
-# About the servo dataset
+# About the breast cancer dataset
 
-This data set is from a simulation of a servo system involving a servo amplifier, a motor, a lead screw/nut, and a sliding carriage of some sort. It may have been on of the translational axes of a robot on the 9th floor of the AI lab. In any case, the output value is almost certainly a rise time, or the time required for the system to respond to a step change in a position set point. The variables that describe the data set and their values are the following:
+This breast cancer databases was obtained from the University of Wisconsin Hospitals, it contains 10 attributes include 9 cell indication attributes and 1 label attributes which shows if the cancer cell is benign or not.
 
-Motor:	A,B,C,D,E
-Screw:	A,B,C,D,E
-Pgain:	3,4,5,6
-Vgain:	1,2,3,4,5
-Class:	0.13 to 7.10
+1. Sample code number: id number
+2. Clump Thickness: 1 - 10
+3. Uniformity of Cell Size: 1 - 10
+4. Uniformity of Cell Shape: 1 - 10
+5. Marginal Adhesion: 1 - 10
+6. Single Epithelial Cell Size: 1 - 10
+7. Bare Nuclei: 1 - 10
+8. Bland Chromatin: 1 - 10
+9. Normal Nucleoli: 1 - 10
+10. Mitoses: 1 - 10
+11. Class: (2 for benign, 4 for malignant)
 # The predictive modeling problem
 
-I would like to investigate if we can use the variables Motor, Screw, Pgain and Vgain to predict the Class of servo by using regression.
+I would like to investigate if we can use those 9 indication attrbutes to predict if the patient have cancer.
 
 # Import the dataset servo
 
@@ -23,116 +29,135 @@ I would like to investigate if we can use the variables Motor, Screw, Pgain and 
 library(readr)
 library(tidyverse)
 library(assertr)
-Servo <- read_csv("Servo.csv")
+bc_data <- read_csv("BreastCancer.csv")
 ```
-# Test each variable
+# Preview the structure of the dataset
 
 ```{r str_check}
-Servo %>% 
+bc_data %>% 
   str()
 ```
 ```{r summary_check}
-Servo %>% 
+bc_data %>% 
   summary()
 ```
-```{r Motor_test}
-Servo %>% 
-  assert(in_set("A","B","C","D","E"), Motor)
-```
-Looks great!
 
-```{r Screw_test}
-Servo %>% 
-  assert(in_set("A","B","C","D","E"), Screw)
-```
-Looks great!
-
-```{r Pgain_test}
-Servo %>% 
-  assert(in_set(3,4,5,6), Pgain)
-```
-Looks great!
-
-```{r Vgain_test}
-Servo %>% 
-  assert(in_set(1,2,3,4,5), Vgain)
-```
-Looks great!
-
-```{r Class_test, error=TRUE}
-Servo %>% 
-  assert(within_bounds(0.13, 7.10), Class)
-```
-Whoops!  It seems like most of the observations have the Class value in the invalid range!  
-
-# Data Cleaning
-
-We assume that this column has been timed 10, so we just divide the values by 10 and we'll select the records with valid Class value.
-```{r data_clean}
-Servo <- Servo %>% 
-  mutate(Class = Class/10) %>% 
-  filter(Class > 0.13, Class < 7.1)
+# Data cleaning and testing
+```{r drop_Id}
+bc_data <- bc_data %>% 
+  select(-Id)
 ```
 
-Then we group the dataset and make it odered
-```{r data_order}
-Servo %>% 
-  arrange(Motor, Screw, Pgain, Vgain)
+```{r drop_na}
+bc_data <- bc_data %>% 
+  drop_na()
 ```
+
+# Test each feature
+```{r test_feature}
+bc_data %>% 
+  assert(within_bounds(1,10), Cl.thickness) %>% 
+  assert(within_bounds(1,10), Cell.size) %>% 
+  assert(within_bounds(1,10),Cell.shape) %>% 
+  assert(within_bounds(1,10), Marg.adhesion) %>% 
+  assert(within_bounds(1,10), Epith.c.size) %>% 
+  assert(within_bounds(1,10), Bare.nuclei) %>% 
+  assert(within_bounds(1,10), Bl.cromatin) %>% 
+  assert(within_bounds(1,10), Normal.nucleoli) %>% 
+  assert(within_bounds(1,10), Mitoses) %>% 
+  assert(in_set("benign", "malignant"), Class)
+  
+```
+
+# Data cleaning
+## For here, I would like to change the variable "Class" to "0" or "1"
+```{r define_label}
+bc_data <- bc_data %>% 
+  mutate(Cancer = ifelse(Class == "malignant", 1, 0)) %>% 
+  select(everything(), -Class)
+```
+The dataset is much cleaner.
+
 # Feature engineering
-```{r functions_define}
-scales2 <- function(x){
+
+I would like to see the difference of each patient's numeric indication from the normal value, it will help us figure out the abnormal parts, however, we do not have the normal value so we use the mean value. 
+```{r diff_function_define}
+cellsize_diff<- function(df){
+  if (!"Cell.size" %in% names(df)) {
+    stop("data must contain 'Cell.size'")
+  }
+  df<- df %>% 
+    mutate(cellsize_diff = Cell.size-mean(Cell.size))
+}
+
+cellthick_diff<- function(df){
+  if (!"Cl.thickness" %in% names(df)) {
+    stop("data must contain 'Cl.thickness'")
+  }
+  df<- df %>% 
+    mutate(cellthick_diff = Cl.thickness-mean(Cl.thickness))
+}
+
+epithcellsize_diff<- function(df){
+  if (!"Epith.c.size" %in% names(df)) {
+    stop("data must contain 'Epith.c.size'")
+  }
+  df<- df %>% 
+    mutate(epithcellsize_diff = Epith.c.size-mean(Epith.c.size))
+}
+
+```
+ 
+## Test those functions
+```{r test_diff_funciton}
+data <- cellsize_diff(bc_data) %>% 
+  cellthick_diff() %>% 
+  epithcellsize_diff() %>% 
+  select(contains("_diff"), everything())
+data
+```
+As we can see, those features are working.
+
+## Standardize function
+
+I would like to standarlize all the numeric attributes to erase the affect of the outlier values.
+```{r define_std_function}
+scales_form <- function(x){
   (x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE)
 }
-class_mean <- function(df, vars){
+
+std_var <- function(df, vars){
   df %>% 
-    group_by(Motor, Screw) %>% 
-    mutate(mean_class = mean({{vars}}, na.rm = TRUE)) %>% 
-    ungroup() 
-}
-class_max <- function(df, vars){
-  df %>% 
-    group_by(Motor, Screw) %>% 
-    mutate(max_class = max({{vars}})) %>% 
-    ungroup() 
-}
-class_min<- function(df, vars){
-  df %>% 
-    group_by(Motor, Screw) %>% 
-    mutate(min_class = min({{vars}})) %>% 
-    ungroup() 
-}
-class_std <- function(df, vars){
-  df %>% 
-    group_by(Motor, Screw) %>% 
-    mutate_at(vars, list(std_class = scales2)) %>% 
-    ungroup() 
+    mutate_at(vars, list(std_cell = scales_form)) %>% 
+    select(contains("_cell"), everything())
 }
 ```
 
-```{r features_create}
-featured_Servo <- Servo %>% 
-  class_mean(Class) %>% 
-  class_max(Class) %>% 
-  class_min(Class) %>% 
-  class_std(c('Class'))
+## Test the standardize function
+```{r test_std_function}
+data <- data %>% 
+std_var(c("cellsize_diff", "cellthick_diff", "epithcellsize_diff", "Cl.thickness", "Cell.size", "Epith.c.size"))
+
+data
 ```
-
-```{r features_test}
-# Test the features
-featured_Servo %>% 
-  assert(within_bounds(0.13, 7.10), max_class)
-
-featured_Servo %>% 
-  assert(within_bounds(0.13, 7.10), min_class)
-
-featured_Servo %>% 
-  assert(within_bounds(0.13, 7.10), mean_class)
-```
+Looks great!
 
 # Prepare the data for modeling
-```{r data_prepare}
-# The dataset has been cleaned and it's ready for applying the model.
-modeling_data <- Servo
+
+```{r}
+model_data <- data %>% 
+  select(everything(),-Cell.size,-Cl.thickness, -Epith.c.size, -cellsize_diff, -cellthick_diff, -epithcellsize_diff)
+
+model_data
+```
+## Split the data into train data and test data
+```{r split_data}
+set.seed(1031)
+train_sub <- sample(nrow(model_data),0.7*nrow(model_data))
+train_set <- model_data[train_sub,]
+val_test_set <- model_data[-train_sub,]
+val_sub <- sample(nrow(val_test_set), 0.5*nrow(val_test_set))
+val_set <- val_test_set[val_sub,]
+test_set <- val_test_set[-val_sub,]
 ```
 
